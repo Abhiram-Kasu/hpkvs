@@ -17,8 +17,8 @@ where
         }
     }
 
-    pub fn add_item(&mut self, k: K, value: V) -> Option<V> {
-        self.map.insert(k, value)
+    pub fn add_item(&mut self, k: K, value: V) {
+        self.map.insert(k, value);
     }
 
     pub fn read_item(&self, k: K) -> Option<&V> {

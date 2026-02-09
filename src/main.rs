@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use std::{borrow::Cow, str::Chars};
 
@@ -43,15 +43,37 @@ async fn main() {
 
                                 match data.get(0..1) {
                                     Some("W") => {
-                                        if let Some((key, value)) = parse_key_value(&data) {
-                                            handle_write(key, value, kv_store).await;
-                                        }
+                                        stream
+                                            .write(match parse_key_value(&data[1..]) {
+                                                Some((key, value)) => {
+                                                    println!("Read {key} : {value}");
+                                                    handle_write(
+                                                        key,
+                                                        value,
+                                                        kv_store.lock().await.deref_mut(),
+                                                    );
+                                                    "200".as_bytes()
+                                                }
+                                                None => "Failed to parse key and value".as_bytes(),
+                                            })
+                                            .await
+                                            .expect("Failed to write");
                                     }
                                     Some("R") if data.len() > 1 => {
                                         if let Some(rest) = data.get(1..) {
                                             match handle_read(rest, kv_store.lock().await.deref()) {
-                                                Some(item) => {}
-                                                None => {}
+                                                Some(item) => {
+                                                    stream
+                                                        .write(item.as_bytes())
+                                                        .await
+                                                        .expect("Failed to Read");
+                                                }
+                                                None => {
+                                                    stream
+                                                        .write("404 Failed to find item".as_bytes())
+                                                        .await
+                                                        .expect("Failed to Write");
+                                                }
                                             }
                                         }
                                     }
@@ -63,15 +85,6 @@ async fn main() {
                                         continue;
                                     }
                                 }
-                                //replace escaped : with regular colon
-
-                                // TODO: Handle key-value pair
-                                println!("Key: {}, Value: {}", key, value);
-                                // kv_store
-                                //     .lock()
-                                //     .await
-                                //     .add_item(key.to_owned(), value.to_owned())
-                                //     .await;
                             }
                             Err(e) => {
                                 dbg!(e);
@@ -88,13 +101,16 @@ async fn main() {
     }
 }
 
-fn handle_write(key: &str, value: &str, kv_store: Arc<Mutex<KVStore<String, String>>>) {}
+fn handle_write(key: &str, value: &str, kv_store: &mut KVStore<String, String>) {
+    kv_store.add_item(key.into(), value.into());
+}
 
 fn handle_read<'a>(key: &str, kv_store: &'a KVStore<String, String>) -> Option<&'a str> {
     kv_store.read_item(key.into()).map(|f| f.as_str())
 }
 
 fn parse_key_value(str: &str) -> Option<(&str, &str)> {
+    println!("Parsing str: {str}");
     str.find(" : ")
         .map(|location| (&str[0..location], &str[location + 3..]))
 }
