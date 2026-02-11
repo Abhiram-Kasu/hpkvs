@@ -52,16 +52,21 @@ async fn main() {
                                                         value,
                                                         kv_store.lock().await.deref_mut(),
                                                     );
-                                                    "200".as_bytes()
+                                                    "200\n".as_bytes()
                                                 }
-                                                None => "Failed to parse key and value".as_bytes(),
+                                                None => {
+                                                    "Failed to parse key and value\n".as_bytes()
+                                                }
                                             })
                                             .await
                                             .expect("Failed to write");
                                     }
-                                    Some("R") if data.len() > 1 => {
-                                        if let Some(rest) = data.get(1..) {
-                                            match handle_read(rest, kv_store.lock().await.deref()) {
+                                    Some("R") => match data.get(1..) {
+                                        Some(rest) => {
+                                            match handle_read(
+                                                rest.trim(),
+                                                kv_store.lock().await.deref(),
+                                            ) {
                                                 Some(item) => {
                                                     stream
                                                         .write(item.as_bytes())
@@ -70,13 +75,16 @@ async fn main() {
                                                 }
                                                 None => {
                                                     stream
-                                                        .write("404 Failed to find item".as_bytes())
+                                                        .write(
+                                                            "404 Failed to find item\n".as_bytes(),
+                                                        )
                                                         .await
                                                         .expect("Failed to Write");
                                                 }
                                             }
                                         }
-                                    }
+                                        _ => (),
+                                    },
                                     _ => {
                                         stream
                                             .write("Failed to parse".as_bytes())
@@ -112,7 +120,7 @@ fn handle_read<'a>(key: &str, kv_store: &'a KVStore<String, String>) -> Option<&
 fn parse_key_value(str: &str) -> Option<(&str, &str)> {
     println!("Parsing str: {str}");
     str.find(" : ")
-        .map(|location| (&str[0..location], &str[location + 3..]))
+        .map(|location| (str[0..location].trim(), str[location + 3..].trim()))
 }
 #[derive(Clone, Debug)]
 struct Parser {
